@@ -1,0 +1,43 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.x"]
+        include:
+          - { os: ubuntu-latest, python: "3.9" }
+          - { os: windows-latest, python: "3.9" }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Install twice into a path with spaces
+        shell: bash
+        env:
+          CODEX_HOME: ${{ runner.temp }}/codex home
+        run: |
+          python install.py
+          python install.py | grep "Already up to date: security-campaign"
+          python -c "import filecmp, os, sys; sys.exit(not filecmp.cmp('skills/security-campaign/SKILL.md', os.path.join(os.environ['CODEX_HOME'], 'skills', 'security-campaign', 'SKILL.md'), shallow=False))"
+      - name: Native PowerShell install
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:CODEX_HOME = Join-Path $env:RUNNER_TEMP 'pwsh codex home'
+          python install.py
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (-not (Test-Path (Join-Path $env:CODEX_HOME 'skills\security-campaign\SKILL.md'))) { exit 1 }
